@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Just Eat MCP Server v3.1 — search UK restaurants and menus via public API."""
+"""Just Eat MCP Server v3.2 — search UK restaurants and menus via public API."""
 import html as _html
 import json
 import re
@@ -20,7 +20,7 @@ if hasattr(sys.stdin, "reconfigure"):            # binary/undecodable bytes must
     sys.stdin.reconfigure(errors="replace")      # invalid UTF-8 → U+FFFD → lands in the json.loads except
 
 ERA_VERSION = "2026-07-28"
-SERVER_INFO = {"name": "just-eat-mcp", "version": "3.1.0"}   # bumped 3.2.0 in T05 (D7)
+SERVER_INFO = {"name": "just-eat-mcp", "version": "3.2.0"}   # D7 minor bump (A.2 T05)
 ERA_RESULT_FIELDS = {"resultType": "complete", "ttlMs": 0, "cacheScope": "private"}
 RESULT_META = {"io.modelcontextprotocol/serverInfo": SERVER_INFO}
 
