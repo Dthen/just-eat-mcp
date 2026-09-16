@@ -1,0 +1,135 @@
+[
+  {
+    "name": "search_restaurants",
+    "description": "Search Just Eat restaurants by UK postcode. Returns names, cuisines, ratings, real delivery fees, ETAs, deals, distance, and URLs. Supports cuisine/rating/open filters and a limit parameter.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "postcode": {
+          "type": "string",
+          "description": "UK postcode (e.g. 'KA7 1AA' or 'KA7')"
+        },
+        "cuisine": {
+          "type": "string",
+          "description": "Optional: filter by cuisine (e.g. 'Indian', 'Pizza')"
+        },
+        "min_rating": {
+          "type": "number",
+          "description": "Optional: minimum star rating (0-5)"
+        },
+        "open_only": {
+          "type": "boolean",
+          "description": "Optional: only show currently open for delivery"
+        },
+        "limit": {
+          "type": "number",
+          "description": "Optional: max results to return (default 20, max 100, min 1)"
+        }
+      },
+      "required": [
+        "postcode"
+      ]
+    }
+  },
+  {
+    "name": "search_by_location",
+    "description": "Search Just Eat restaurants by latitude/longitude. Returns same data as search_restaurants. Useful for GPS/current-location searches.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "latitude": {
+          "type": "number",
+          "description": "Latitude (e.g. 55.462)"
+        },
+        "longitude": {
+          "type": "number",
+          "description": "Longitude (e.g. -4.634)"
+        },
+        "cuisine": {
+          "type": "string",
+          "description": "Optional: filter by cuisine"
+        },
+        "min_rating": {
+          "type": "number",
+          "description": "Optional: minimum star rating (0-5)"
+        },
+        "open_only": {
+          "type": "boolean",
+          "description": "Optional: only show currently open for delivery"
+        },
+        "limit": {
+          "type": "number",
+          "description": "Optional: max results (default 20, max 100)"
+        }
+      },
+      "required": [
+        "latitude",
+        "longitude"
+      ]
+    }
+  },
+  {
+    "name": "get_curated_lists",
+    "description": "Get server-curated restaurant lists for a postcode: Speedy Delivery ⚡, Top Rated, Deals 🔥, Save on Delivery 💸, and more. Returns restaurant IDs and names for each list. Pass a postcode.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "postcode": {
+          "type": "string",
+          "description": "UK postcode (e.g. 'KA7 1AA')"
+        }
+      },
+      "required": [
+        "postcode"
+      ]
+    }
+  },
+  {
+    "name": "get_cuisines",
+    "description": "Get available cuisine types and counts for a UK postcode on Just Eat.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "postcode": {
+          "type": "string",
+          "description": "UK postcode (e.g. 'KA7 1AA')"
+        }
+      },
+      "required": [
+        "postcode"
+      ]
+    }
+  },
+  {
+    "name": "get_menu",
+    "description": "Get the full categorized menu for a Just Eat restaurant — all items with names, descriptions, prices, and customization options (modifier groups, deal groups). Pass the URL from search_restaurants results.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "restaurant_url": {
+          "type": "string",
+          "description": "Full Just Eat restaurant URL from search results"
+        }
+      },
+      "required": [
+        "restaurant_url"
+      ]
+    }
+  },
+  {
+    "name": "get_restaurant_info",
+    "description": "Get detailed restaurant information: full description, logo/banner images, opening hours, allergen URL, cuisines, address, and shareable link. Pass the URL from search_restaurants results.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "restaurant_url": {
+          "type": "string",
+          "description": "Full Just Eat restaurant URL from search results"
+        }
+      },
+      "required": [
+        "restaurant_url"
+      ]
+    }
+  }
+]
