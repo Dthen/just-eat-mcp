@@ -15,6 +15,23 @@ REQUEST_HEADERS = {"User-Agent": "Mozilla/5.0"}
 MAX_RETRIES = 2
 RETRY_DELAY = 2
 
+# ── Era constants + stateless guards (migration card A.2, PLAN D2/D3; REFERENCE §1) ──
+if hasattr(sys.stdin, "reconfigure"):            # binary/undecodable bytes must not kill the loop
+    sys.stdin.reconfigure(errors="replace")      # invalid UTF-8 → U+FFFD → lands in the json.loads except
+
+ERA_VERSION = "2026-07-28"
+SERVER_INFO = {"name": "just-eat-mcp", "version": "3.1.0"}   # bumped 3.2.0 in T05 (D7)
+ERA_RESULT_FIELDS = {"resultType": "complete", "ttlMs": 0, "cacheScope": "private"}
+RESULT_META = {"io.modelcontextprotocol/serverInfo": SERVER_INFO}
+
+
+def era_result(payload):
+    """A result carrying the era-strict fields D3 mandates on every response."""
+    out = dict(payload)
+    out.update(ERA_RESULT_FIELDS)
+    out["_meta"] = RESULT_META
+    return out
+
 
 def safe_get(obj: dict, *keys, default=None):
     """Safely navigate nested dict without KeyError or None-crashing."""
@@ -731,55 +748,54 @@ def send(resp: dict) -> None:
 
 
 def main() -> None:
-    for line in sys.stdin:
+    for line in sys.stdin:                      # EOF on stdin ends the loop (§7)
         line = line.strip()
         if not line:
             continue
         try:
             req = json.loads(line)
-        except json.JSONDecodeError:
+        except Exception:
+            continue                            # garbage lines: skip, NEVER die (§7)
+        if not isinstance(req, dict):           # valid JSON, not an object ("5", null, [1,2]): skip, NEVER die (§7)
             continue
+        rid = req.get("id")                     # str or int; absent ⇒ notification
+        method = req.get("method")              # null/42/etc must not crash .startswith below
+        if not isinstance(method, str):
+            method = ""                         # route as unknown-method
 
-        rid = req.get("id")
-        method = req.get("method", "")
-
-        if method == "initialize":
-            send({
-                "jsonrpc": "2.0", "id": rid,
-                "result": {
-                    "protocolVersion": "2024-11-05",
-                    "capabilities": {"tools": {}},
-                    "serverInfo": {
-                        "name": "just-eat-mcp",
-                        "version": "3.1.0",
-                    },
-                    "instructions": (
-                        "Just Eat MCP Server v3.1 — search UK restaurants by postcode or GPS, "
-                        "get curated lists, cuisine breakdowns, full categorized menus with "
-                        "customization options, and detailed restaurant info. "
-                        "All data from public APIs, no auth required."
-                    ),
-                },
-            })
-        elif method == "tools/list":
-            send({"jsonrpc": "2.0", "id": rid, "result": {"tools": TOOLS}})
-        elif method == "tools/call":
+        if method == "server/discover":         # §2 (the one era entry point; initialize is gone — §3)
+            send({"jsonrpc": "2.0", "id": rid, "result": era_result({
+                "supportedVersions": [ERA_VERSION],
+                "capabilities": {"tools": {}}})})
+        elif method == "tools/list":            # §4 (TOOLS byte-frozen per D4 golden)
+            send({"jsonrpc": "2.0", "id": rid, "result": era_result({"tools": TOOLS})})
+        elif method == "tools/call":            # §5
+            params = req.get("params")
+            if not isinstance(params, dict) or not isinstance(params.get("name"), str):
+                send({"jsonrpc": "2.0", "id": rid, "error": {"code": -32602,
+                    "message": "missing required param: params (with string 'name')"}})
+                continue
             try:
-                params = req.get("params", {})
-                name = params.get("name", "")
-                result = handle_call(name, params.get("arguments", {}))
-            except ValueError as e:
-                result = f"Error: {e}"
-            except Exception as e:
-                result = f"Internal error: {e}"
-            send({
-                "jsonrpc": "2.0", "id": rid,
-                "result": {"content": [{"type": "text", "text": result}]},
-            })
-        elif method.startswith("notifications/"):
+                result = handle_call(params["name"], params.get("arguments", {}))
+            except Exception as e:              # dispatch-level only (shouldn't happen)
+                send({"jsonrpc": "2.0", "id": rid, "error": {"code": -32603, "message": str(e)}})
+                continue
+            # DEVIATION from REFERENCE §5 (justified: R3 owner ruling — string-result wire drift
+            # kept verbatim per §5's pass-through convention ("String results: pass through
+            # verbatim"); legacy error text "Error: …" rides in content as-is, no isError, since
+            # handle_call never returns dicts here. Note: §5's "do not DEVIATION-tag" line covers
+            # loop structure only — R3 mandates the tag for this wire drift. Pin tests: T03 #7/#8, T02.)
+            send({"jsonrpc": "2.0", "id": rid,
+                  "result": era_result({"content": [{"type": "text", "text": result}]})})
+        elif method.startswith("notifications/"):  # §6: consume silently, never respond
             pass
-        elif method == "ping":
+        elif method == "ping":                  # §6: the {} form (lenient EmptyResult tolerates it)
             send({"jsonrpc": "2.0", "id": rid, "result": {}})
+        else:                                   # §3 catch-all
+            # includes legacy `initialize` (D2) and every other unknown method, per JSON-RPC
+            if rid is None and "id" not in req:
+                continue                        # no-id = notification: never respond
+            send({"jsonrpc": "2.0", "id": rid, "error": {"code": -32601, "message": f"Method not found: {method}"}})
 
 
 if __name__ == "__main__":
