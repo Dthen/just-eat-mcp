@@ -1,14 +1,15 @@
 """Era wire suite for the 2026-07-28 stateless protocol (migration card A.2, T03).
 
 Subprocess-driven, network-free: every case spawns server.py and drives it over its
-stdio pipes exactly as a client would. Committed RED against the legacy server —
-the 12 era-dispatch expectations go green in T04; tests 4, 6, 10, 12, 17 are
-regression pins that are green already and must stay green.
+stdio pipes exactly as a client would. The suite pins the stateless 2026-07-28 wire
+contract, including notification correlation and explicit null request ids.
 """
 import json
 import os
 import select
 import subprocess
+
+import pytest
 
 # Production interpreter (the live config pins /usr/bin/python3 — REFERENCE recipe 7),
 # NOT the pytest runner's venv python.
@@ -58,7 +59,7 @@ def discover_req(rid=1):
             "params": {"clientInfo": {"name": "era-suite"}, "protocolVersions": ["2026-07-28"]}}
 
 
-# ────────────────────────────── era (12) ──────────────────────────────
+# ────────────────────────────── era ──────────────────────────────
 
 def test_discover_era_shape():
     p = spawn()
@@ -247,7 +248,50 @@ def test_id_less_unknown_is_silent():
         p.kill(); p.wait()
 
 
-# ────────────────────────── regression (5) ──────────────────────────
+@pytest.mark.parametrize("method, params", [
+    ("server/discover", {}),
+    ("tools/list", {}),
+    ("tools/call", {"name": "bogus", "arguments": {}}),
+    ("ping", {}),
+])
+def test_id_less_known_method_is_silent_and_does_not_displace_next_response(method, params):
+    """JSON-RPC notifications stay silent before every known-method dispatch path."""
+    p = spawn()
+    try:
+        notification = {"jsonrpc": "2.0", "method": method, "params": params}
+        p.stdin.write(json.dumps(notification) + "\n")
+        p.stdin.flush()
+        resp = rpc(p, {"jsonrpc": "2.0", "id": 17, "method": "ping", "params": {}})
+        assert resp is not None
+        assert resp["id"] == 17
+        assert resp["result"] == {}
+    finally:
+        p.kill(); p.wait()
+
+
+@pytest.mark.parametrize("method, params", [
+    ("server/discover", {}),
+    ("tools/list", {}),
+    ("tools/call", {"name": "bogus", "arguments": {}}),
+    ("ping", {}),
+])
+def test_explicit_null_id_receives_response(method, params):
+    """An explicitly included JSON null is a request, unlike an absent id member."""
+    p = spawn()
+    try:
+        resp = rpc(p, {"jsonrpc": "2.0", "id": None, "method": method, "params": params})
+        assert resp is not None
+        assert "id" in resp
+        assert resp["id"] is None
+        if method == "tools/call":
+            assert resp["result"]["content"][0]["text"] == "Unknown tool: bogus"
+        else:
+            assert "result" in resp
+    finally:
+        p.kill(); p.wait()
+
+
+# ────────────────────────── regression ──────────────────────────
 # REFERENCE §7 pinned shapes.
 
 def test_garbage_lines_do_not_kill_the_server():

@@ -758,7 +758,9 @@ def main() -> None:
             continue                            # garbage lines: skip, NEVER die (§7)
         if not isinstance(req, dict):           # valid JSON, not an object ("5", null, [1,2]): skip, NEVER die (§7)
             continue
-        rid = req.get("id")                     # str or int; absent ⇒ notification
+        rid = req.get("id")                     # str, int, or explicit null
+        if "id" not in req:                    # JSON-RPC notification: never respond, for any method
+            continue
         method = req.get("method")              # null/42/etc must not crash .startswith below
         if not isinstance(method, str):
             method = ""                         # route as unknown-method
@@ -793,8 +795,6 @@ def main() -> None:
             send({"jsonrpc": "2.0", "id": rid, "result": {}})
         else:                                   # §3 catch-all
             # includes legacy `initialize` (D2) and every other unknown method, per JSON-RPC
-            if rid is None and "id" not in req:
-                continue                        # no-id = notification: never respond
             send({"jsonrpc": "2.0", "id": rid, "error": {"code": -32601, "message": f"Method not found: {method}"}})
 
 
